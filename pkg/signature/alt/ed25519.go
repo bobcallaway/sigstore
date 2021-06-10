@@ -16,6 +16,7 @@
 package alt
 
 import (
+	"context"
 	"crypto"
 	"crypto/ed25519"
 	"io"
@@ -23,21 +24,26 @@ import (
 	"github.com/pkg/errors"
 )
 
-type ED25519Signer BaseSigner
+type ED25519Signer struct {
+	priv *ed25519.PrivateKey
+}
 
 func NewED25519Signer(priv *ed25519.PrivateKey) (*ED25519Signer, error) {
+	if priv == nil {
+		return nil, errors.New("invalid ED25519 private key specified")
+	}
+
 	return &ED25519Signer{
 		priv: priv,
 	}, nil
 }
 
-func (e ED25519Signer) SignMessage(message []byte, opts ...Option) ([]byte, error) {
+// SignMessage generates the signature for the message using the ED25519 key
+//
+// All options are ignored by this function.
+func (e ED25519Signer) SignMessage(message []byte, _ ...SignerOption) ([]byte, error) {
 	req := &signRequest{
 		message: message,
-	}
-
-	for _, opt := range opts {
-		opt.applySigner(req)
 	}
 
 	if err := e.validate(req); err != nil {
@@ -52,15 +58,12 @@ func (e ED25519Signer) validate(req *signRequest) error {
 	if e.priv == nil {
 		return errors.New("private key is not initialized")
 	}
-	if _, ok := e.priv.(*ed25519.PrivateKey); !ok {
-		return errors.New("private key is not a valid ED25519 key")
-	}
 
 	return nil
 }
 
 func (e ED25519Signer) computeSignature(req *signRequest) ([]byte, error) {
-	return ed25519.Sign(*e.priv.(*ed25519.PrivateKey), req.message), nil
+	return ed25519.Sign(*e.priv, req.message), nil
 }
 
 func (e ED25519Signer) CryptoSigner() (crypto.Signer, error) {
@@ -68,7 +71,7 @@ func (e ED25519Signer) CryptoSigner() (crypto.Signer, error) {
 		return nil, errors.New("private key not initialized")
 	}
 
-	return e.priv.(*ed25519.PrivateKey), nil
+	return e.priv, nil
 }
 
 func (e ED25519Signer) Public() crypto.PublicKey {
@@ -76,22 +79,34 @@ func (e ED25519Signer) Public() crypto.PublicKey {
 		return nil
 	}
 
-	return e.priv.(*ed25519.PrivateKey).Public()
+	return e.priv.Public()
+}
+
+func (e ED25519Signer) PublicWithContext(_ context.Context) (crypto.PublicKey, error) {
+	return e.Public(), nil
 }
 
 func (e ED25519Signer) Sign(_ io.Reader, message []byte, _ crypto.SignerOpts) ([]byte, error) {
 	return e.SignMessage(message)
 }
 
-type ED25519Verifier BaseVerifier
+type ED25519Verifier struct {
+	PublicKey *ed25519.PublicKey
+}
 
 func NewED25519Verifer(pub *ed25519.PublicKey) (*ED25519Verifier, error) {
+	if pub == nil {
+		return nil, errors.New("invalid ED25519 public key specified")
+	}
+
 	return &ED25519Verifier{
-		pub: pub,
+		PublicKey: pub,
 	}, nil
 }
 
-func (e ED25519Verifier) VerifySignature(signature []byte, opts ...Option) error {
+// VerifySignature verifies the signature against the message specified in the
+// WithMessage() option
+func (e ED25519Verifier) VerifySignature(signature []byte, _ []byte, opts ...VerifierOption) error {
 	req := &verifyRequest{
 		signature: signature,
 	}
@@ -108,19 +123,20 @@ func (e ED25519Verifier) VerifySignature(signature []byte, opts ...Option) error
 }
 
 func (e ED25519Verifier) validate(req *verifyRequest) error {
-	// req.publicKey must be set
-	if e.pub == nil {
+	// e.PublicKey must be set
+	if e.PublicKey == nil {
 		return errors.New("public key is not initialized")
 	}
-	if _, ok := e.pub.(*ed25519.PublicKey); !ok {
-		return errors.New("public key is not a valid ED25519 key")
+
+	if req.message == nil {
+		return errors.New("message must be specified in WithMessage() option")
 	}
 
 	return nil
 }
 
 func (e ED25519Verifier) verify(req *verifyRequest) error {
-	if !ed25519.Verify(*e.pub.(*ed25519.PublicKey), req.message, req.signature) {
+	if !ed25519.Verify(*e.PublicKey, req.message, req.signature) {
 		return errors.New("failed to verify signature")
 	}
 	return nil
@@ -131,12 +147,13 @@ type ED25519SignerVerifier struct {
 	ED25519Verifier
 }
 
-func NewED25519SignerVerifier(priv *ed25519.PrivateKey, hf crypto.Hash) (*ED25519SignerVerifier, error) {
+func NewED25519SignerVerifier(priv *ed25519.PrivateKey) (*ED25519SignerVerifier, error) {
 	signer, err := NewED25519Signer(priv)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing signer")
 	}
-	verifier, err := NewED25519Verifer(priv.Public().(*ed25519.PublicKey))
+	pub := priv.Public().(ed25519.PublicKey)
+	verifier, err := NewED25519Verifer(&pub)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing verifier")
 	}

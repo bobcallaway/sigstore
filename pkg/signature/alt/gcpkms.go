@@ -19,9 +19,13 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"regexp"
 
+	kms "cloud.google.com/go/kms/apiv1"
 	kmspb "google.golang.org/genproto/googleapis/cloud/kms/v1"
 
 	"github.com/pkg/errors"
@@ -29,9 +33,10 @@ import (
 
 type GCPSigner struct {
 	BaseKMS
-	hf         crypto.Hash
-	version    string
+	hf crypto.Hash
+	//version    string // TODO: implement this
 	keyVersion kmspb.CryptoKeyVersion
+	client     *kms.KeyManagementClient
 }
 
 var (
@@ -45,17 +50,31 @@ func NewGCPSigner(defaultCtx context.Context, referenceStr string) (*GCPSigner, 
 		return nil, ErrKMSReference
 	}
 
-	return &GCPSigner{
+	if defaultCtx == nil {
+		defaultCtx = context.Background()
+	}
+
+	g := &GCPSigner{
 		BaseKMS: BaseKMS{
 			defaultCtx: defaultCtx,
 			refString:  referenceStr,
 		},
-	}, nil
+	}
+
+	var err error
+	g.client, err = kms.NewKeyManagementClient(defaultCtx)
+	if err != nil {
+		return nil, errors.Wrap(err, "new gcp kms client")
+	}
+
+	return g, nil
 }
 
-func (g *GCPSigner) SignMessage(digest []byte, opts ...Option) ([]byte, error) {
+func (g *GCPSigner) SignMessage(message []byte, opts ...SignerOption) ([]byte, error) {
 	req := &signRequest{
-		digest: digest,
+		message:  message,
+		ctx:      g.defaultCtx,
+		hashFunc: g.hf,
 	}
 
 	for _, opt := range opts {
@@ -71,7 +90,7 @@ func (g *GCPSigner) SignMessage(digest []byte, opts ...Option) ([]byte, error) {
 
 func (g *GCPSigner) validate(req *signRequest) error {
 	// g.hf must not be crypto.Hash(0)
-	if g.hf == crypto.Hash(0) && req.hf == crypto.Hash(0) {
+	if g.hf == crypto.Hash(0) && req.hashFunc == crypto.Hash(0) {
 		return errors.New("invalid hash function specified")
 	}
 
@@ -79,7 +98,7 @@ func (g *GCPSigner) validate(req *signRequest) error {
 }
 
 func (g *GCPSigner) computeSignature(req *signRequest) ([]byte, error) {
-	hf := req.hf
+	hf := req.hashFunc
 	if hf == crypto.Hash(0) {
 		hf = g.hf
 	}
@@ -91,6 +110,8 @@ func (g *GCPSigner) computeSignature(req *signRequest) ([]byte, error) {
 			return nil, errors.Wrap(err, "hashing during GCP signature")
 		}
 		digest = hasher.Sum(nil)
+	} else if len(digest) != hf.Size() {
+		return nil, errors.New("unexpected length of digest for hash function specified")
 	}
 
 	gcpSignReq := kmspb.AsymmetricSignRequest{
@@ -115,61 +136,128 @@ func (g *GCPSigner) computeSignature(req *signRequest) ([]byte, error) {
 		return nil, errors.New("unsupported hash function")
 	}
 
-	return nil, nil
+	resp, err := g.client.AsymmetricSign(req.ctx, &gcpSignReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "calling GCP AsymmetricSign")
+	}
+
+	//TODO: add crc checking
+
+	return resp.Signature, nil
 }
 
+// Public returns the current Public Key stored in KMS using the default context;
+// if there is an error, this method returns nil
 func (g *GCPSigner) Public() crypto.PublicKey {
-	//TODO: implement getting public key
-	return nil
+	pub, _ := g.PublicWithContext(g.defaultCtx)
+	// TODO: log err
+	return pub
 }
 
-func (g *GCPSigner) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
-	return g.SignMessage(digest)
-}
-
-type GCPVerifier BaseVerifier
-
-func NewGCPVerifer(pub *ecdsa.PublicKey) (*GCPVerifier, error) {
-	return &GCPVerifier{
-		pub: pub,
-	}, nil
-}
-
-func (g GCPVerifier) VerifySignature(signature []byte, opts ...Option) error {
-	req := &verifyRequest{
-		signature: signature,
+// PublicWithContext returns the current Public Key stored in KMS using the specified
+// context; if there is an error, this method returns nil
+func (g *GCPSigner) PublicWithContext(ctx context.Context) (crypto.PublicKey, error) {
+	gcpKeyReq := kmspb.GetPublicKeyRequest{
+		Name: g.keyVersion.Name,
 	}
 
-	for _, opt := range opts {
-		opt.applyVerifier(req)
+	resp, err := g.client.GetPublicKey(ctx, &gcpKeyReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "GCP GetPublicKey")
 	}
 
-	if err := g.validate(req); err != nil {
-		return err
+	p, _ := pem.Decode([]byte(resp.GetPem()))
+	if p == nil {
+		return nil, errors.New("pem.Decode failed")
 	}
 
-	return g.verify(req)
+	publicKey, err := x509.ParsePKIXPublicKey(p.Bytes)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse public key")
+	}
+	return publicKey, nil
 }
 
-func (g GCPVerifier) validate(req *verifyRequest) error {
-	// req.publicKey must be set
+// Sign attempts to get the signature for the specified digest using GCP KMS
+// This will use the default context set when the GCPSigner was created, unless
+// opts are passed to this method of type GCPContextSignerOpts. If a context is
+// specified in opts, it will be used instead of the default context on the GCPSigner.
+func (g *GCPSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+	var gcpOptions []SignerOption
+	if opts != nil {
+		gcpOptions = append(gcpOptions, WithHashFunc(opts.HashFunc()))
+		if ctxOpts, ok := opts.(*GCPContextSignerOpts); ok {
+			gcpOptions = append(gcpOptions, WithContext(ctxOpts.Context))
+		}
+	}
+	return g.SignMessage(digest, gcpOptions...)
+}
+
+// GCPContextSignerOpts implements crypto.SignerOpts but also allows callers to specify the
+// context under which they want the signing transaction to take place.
+type GCPContextSignerOpts struct {
+	Hash    crypto.Hash
+	Context context.Context
+}
+
+// HashFunc returns the hash function for this object
+func (g GCPContextSignerOpts) HashFunc() crypto.Hash {
+	return g.Hash
+}
+
+type GCPVerifier struct {
+	signer   *GCPSigner       // TODO: replace this when a generic object
+	pub      crypto.PublicKey // TODO: deal with key rotation
+	hash     crypto.Hash
+	verifier Verifier
+}
+
+func NewGCPVerifer(defaultCtx context.Context, referenceStr string) (*GCPVerifier, error) {
+	g := &GCPVerifier{}
+
+	var err error
+	g.signer, err = NewGCPSigner(defaultCtx, referenceStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing GCP connection")
+	}
+	g.pub = g.signer.Public()
 	if g.pub == nil {
-		return errors.New("public key is not initialized")
-	}
-	if _, ok := g.pub.(*ecdsa.PublicKey); !ok {
-		return errors.New("public key is not a valid GCP key")
+		return nil, errors.New("error fetching public key")
 	}
 
-	if req.digest == nil {
-		return errors.New("digest is required to verify GCP signature")
+	switch g.signer.keyVersion.Algorithm {
+	case kmspb.CryptoKeyVersion_EC_SIGN_P256_SHA256:
+		g.hash = crypto.SHA256
+		g.verifier, err = NewECDSAVerifier(g.pub.(*ecdsa.PublicKey), g.hash)
+	case kmspb.CryptoKeyVersion_EC_SIGN_P384_SHA384:
+		g.hash = crypto.SHA384
+		g.verifier, err = NewECDSAVerifier(g.pub.(*ecdsa.PublicKey), g.hash)
+	case kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_2048_SHA256,
+		kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_3072_SHA256,
+		kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_4096_SHA256:
+		g.hash = crypto.SHA256
+		g.verifier, err = NewRSAPKCS1v15Verifier(g.pub.(*rsa.PublicKey), g.hash)
+	case kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_4096_SHA512:
+		g.hash = crypto.SHA512
+		g.verifier, err = NewRSAPKCS1v15Verifier(g.pub.(*rsa.PublicKey), g.hash)
+	case kmspb.CryptoKeyVersion_RSA_SIGN_PSS_2048_SHA256,
+		kmspb.CryptoKeyVersion_RSA_SIGN_PSS_3072_SHA256,
+		kmspb.CryptoKeyVersion_RSA_SIGN_PSS_4096_SHA256:
+		g.hash = crypto.SHA256
+		g.verifier, err = NewRSAPSSVerifier(g.pub.(*rsa.PublicKey), g.hash)
+	case kmspb.CryptoKeyVersion_RSA_SIGN_PSS_4096_SHA512:
+		g.hash = crypto.SHA512
+		g.verifier, err = NewRSAPSSVerifier(g.pub.(*rsa.PublicKey), g.hash)
+	default:
+		return nil, errors.New("unsupported signing algorithm")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "initializing verifier")
 	}
 
-	return nil
+	return g, nil
 }
 
-func (g GCPVerifier) verify(req *verifyRequest) error {
-	if !ecdsa.VerifyASN1(g.pub.(*ecdsa.PublicKey), req.digest, req.signature) {
-		return errors.New("failed to verify signature")
-	}
-	return nil
+func (g GCPVerifier) VerifySignature(signature []byte, digest []byte, opts ...VerifierOption) error {
+	return g.verifier.VerifySignature(signature, digest, opts...)
 }

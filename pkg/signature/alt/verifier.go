@@ -22,19 +22,15 @@ import (
 )
 
 type Verifier interface {
-	VerifySignature(signature []byte, opts ...Option) error
+	VerifySignature(signature []byte, digest []byte, opts ...VerifierOption) error
 }
 
 // this is generic across all implementations
 type verifyRequest struct {
 	ctx       context.Context
-	hf        crypto.Hash
+	hashFunc  crypto.Hash
 	digest    []byte
 	message   []byte
 	signature []byte
 	pssOpts   *rsa.PSSOptions
-}
-
-type BaseVerifier struct {
-	pub crypto.PublicKey
 }

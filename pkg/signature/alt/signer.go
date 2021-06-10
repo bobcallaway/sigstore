@@ -23,21 +23,21 @@ import (
 )
 
 type Signer interface {
-	SignMessage(message []byte, opts ...Option) ([]byte, error)
+	SignMessage(message []byte, opts ...SignerOption) ([]byte, error)
 	crypto.Signer
+	PublicWithContext(ctx context.Context) (crypto.PublicKey, error)
 }
 
 // this is generic across all implementations
 type signRequest struct {
-	ctx     context.Context
-	hf      crypto.Hash
-	pssOpts *rsa.PSSOptions
-	rand    io.Reader
-	digest  []byte
-	message []byte
+	ctx      context.Context
+	hashFunc crypto.Hash
+	pssOpts  *rsa.PSSOptions
+	rand     io.Reader
+	digest   []byte
+	message  []byte
 }
 
 type BaseSigner struct {
-	priv crypto.PrivateKey
-	hf   crypto.Hash
+	HashFunc crypto.Hash
 }

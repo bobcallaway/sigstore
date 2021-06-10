@@ -1,18 +1,19 @@
 package example
 
 import (
+	"context"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
-	"errors"
 
 	"github.com/sigstore/sigstore/pkg/signature/alt"
 )
 
 func ShowMemorySigners() error {
 	rsa, _ := rsa.GenerateKey(rand.Reader, 2048)
-	hf := crypto.SHA256
-	rsaSV, err := alt.NewRSASignerVerifier(rsa, hf)
+	hf := crypto.SHA512
+	rsaSV, err := alt.NewRSAPSSSignerVerifier(rsa, hf)
 	if err != nil {
 		return err
 	}
@@ -26,19 +27,35 @@ func ShowMemorySigners() error {
 	if err != nil {
 		return err
 	}
-	sig2, err := rsaSV.SignMessage(msg, alt.WithDigest(dig))
+
+	if err := rsaSV.VerifySignature(sig1, dig, alt.WithHashFunc(hf)); err != nil {
+		return err
+	}
+
+	edKey := ed25519.NewKeyFromSeed([]byte("seedseedseedseedseedseedseedseed"))
+	edSV, err := alt.NewED25519SignerVerifier(&edKey)
 	if err != nil {
 		return err
 	}
 
-	if err := rsaSV.VerifySignature(sig1, alt.WithDigest(dig)); err != nil {
+	edSig, err := edSV.SignMessage(msg)
+	if err != nil {
 		return err
 	}
-	if err := rsaSV.VerifySignature(sig2, alt.WithDigest(dig)); err != nil {
+
+	// ED25519 needs the message, not a digest, so this is a bit yucky
+	if err := edSV.VerifySignature(edSig, nil, alt.WithMessage(msg)); err != nil {
 		return err
 	}
-	if err := rsaSV.VerifySignature(sig1); err == nil {
-		return errors.New("should have errored due to missing digest")
+
+	gcpKMS, err := alt.NewGCPSigner(context.Background(), "gcpkms://something")
+	if err != nil {
+		return err
 	}
+
+	if _, err := gcpKMS.SignMessage(msg, alt.WithContext(context.Background())); err != nil {
+		return err
+	}
+
 	return nil
 }

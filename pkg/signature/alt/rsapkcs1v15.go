@@ -25,12 +25,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-type RSAPSSSigner struct {
+type RSAPKCS1v15Signer struct {
 	BaseSigner
 	priv *rsa.PrivateKey
 }
 
-func NewRSAPSSSigner(priv *rsa.PrivateKey, hf crypto.Hash) (*RSAPSSSigner, error) {
+func NewRSAPKCS1v15Signer(priv *rsa.PrivateKey, hf crypto.Hash) (*RSAPKCS1v15Signer, error) {
 	if priv == nil {
 		return nil, errors.New("invalid RSA private key specified")
 	}
@@ -39,7 +39,7 @@ func NewRSAPSSSigner(priv *rsa.PrivateKey, hf crypto.Hash) (*RSAPSSSigner, error
 		return nil, errors.New("invalid hash function specified")
 	}
 
-	return &RSAPSSSigner{
+	return &RSAPKCS1v15Signer{
 		priv: priv,
 		BaseSigner: BaseSigner{
 			HashFunc: hf,
@@ -54,7 +54,7 @@ func NewRSAPSSSigner(priv *rsa.PrivateKey, hf crypto.Hash) (*RSAPSSSigner, error
 // WithHashFunc()
 //
 // All other options are ignored if specified.
-func (r RSAPSSSigner) SignMessage(message []byte, opts ...SignerOption) ([]byte, error) {
+func (r RSAPKCS1v15Signer) SignMessage(message []byte, opts ...SignerOption) ([]byte, error) {
 	req := &signRequest{
 		message: message,
 		rand:    rand.Reader,
@@ -71,30 +71,24 @@ func (r RSAPSSSigner) SignMessage(message []byte, opts ...SignerOption) ([]byte,
 	return r.computeSignature(req)
 }
 
-func (r RSAPSSSigner) validate(req *signRequest) error {
+func (r RSAPKCS1v15Signer) validate(req *signRequest) error {
 	// r.priv must be set
 	if r.priv == nil {
 		return errors.New("private key is not initialized")
 	}
 
 	// r.HashFunc must not be crypto.Hash(0)
-	if r.HashFunc == crypto.Hash(0) && req.pssOpts.Hash == crypto.Hash(0) && req.hashFunc == crypto.Hash(0) {
+	if r.HashFunc == crypto.Hash(0) && req.hashFunc == crypto.Hash(0) {
 		return errors.New("invalid hash function specified")
 	}
 
 	return nil
 }
 
-func (r RSAPSSSigner) computeSignature(req *signRequest) ([]byte, error) {
-	var hf crypto.Hash
-	if req.pssOpts != nil {
-		hf = req.pssOpts.Hash
-	}
+func (r RSAPKCS1v15Signer) computeSignature(req *signRequest) ([]byte, error) {
+	hf := req.hashFunc
 	if hf == crypto.Hash(0) {
-		hf = req.hashFunc
-		if hf == crypto.Hash(0) {
-			hf = r.HashFunc
-		}
+		hf = r.HashFunc
 	}
 
 	digest := req.digest
@@ -110,10 +104,10 @@ func (r RSAPSSSigner) computeSignature(req *signRequest) ([]byte, error) {
 		}
 	}
 
-	return rsa.SignPSS(req.rand, r.priv, hf, digest, req.pssOpts)
+	return rsa.SignPKCS1v15(req.rand, r.priv, hf, digest)
 }
 
-func (r RSAPSSSigner) Public() crypto.PublicKey {
+func (r RSAPKCS1v15Signer) Public() crypto.PublicKey {
 	if r.priv == nil {
 		return nil
 	}
@@ -121,13 +115,14 @@ func (r RSAPSSSigner) Public() crypto.PublicKey {
 	return r.priv.Public()
 }
 
-func (r RSAPSSSigner) PublicWithContext(_ context.Context) (crypto.PublicKey, error) {
+func (r RSAPKCS1v15Signer) PublicWithContext(_ context.Context) (crypto.PublicKey, error) {
 	return r.Public(), nil
 }
 
-func (r RSAPSSSigner) Sign(rand io.Reader, message []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (r RSAPKCS1v15Signer) Sign(rand io.Reader, message []byte, opts crypto.SignerOpts) ([]byte, error) {
 	rsaOpts := []SignerOption{WithRand(rand)}
 	if opts != nil {
+		rsaOpts = append(rsaOpts, WithHashFunc(opts.HashFunc()))
 		if optsArg, ok := opts.(*rsa.PSSOptions); ok {
 			rsaOpts = append(rsaOpts, WithPSSOptions(optsArg))
 		}
@@ -135,12 +130,12 @@ func (r RSAPSSSigner) Sign(rand io.Reader, message []byte, opts crypto.SignerOpt
 	return r.SignMessage(message, rsaOpts...)
 }
 
-type RSAPSSVerifier struct {
+type RSAPKCS1v15Verifier struct {
 	PublicKey *rsa.PublicKey
 	Hash      crypto.Hash
 }
 
-func NewRSAPSSVerifier(pub *rsa.PublicKey, hashFunc crypto.Hash) (*RSAPSSVerifier, error) {
+func NewRSAPKCS1v15Verifier(pub *rsa.PublicKey, hashFunc crypto.Hash) (*RSAPKCS1v15Verifier, error) {
 	if pub == nil {
 		return nil, errors.New("invalid RSA public key specified")
 	}
@@ -149,13 +144,13 @@ func NewRSAPSSVerifier(pub *rsa.PublicKey, hashFunc crypto.Hash) (*RSAPSSVerifie
 		return nil, errors.New("invalid hash function specified")
 	}
 
-	return &RSAPSSVerifier{
+	return &RSAPKCS1v15Verifier{
 		PublicKey: pub,
 		Hash:      hashFunc,
 	}, nil
 }
 
-func (r RSAPSSVerifier) VerifySignature(signature []byte, digest []byte, opts ...VerifierOption) error {
+func (r RSAPKCS1v15Verifier) VerifySignature(signature []byte, digest []byte, opts ...VerifierOption) error {
 	req := &verifyRequest{
 		signature: signature,
 		digest:    digest,
@@ -173,7 +168,7 @@ func (r RSAPSSVerifier) VerifySignature(signature []byte, digest []byte, opts ..
 	return r.verify(req)
 }
 
-func (r RSAPSSVerifier) validate(req *verifyRequest) error {
+func (r RSAPKCS1v15Verifier) validate(req *verifyRequest) error {
 	// r.PublicKey must be set
 	if r.PublicKey == nil {
 		return errors.New("public key is not initialized")
@@ -191,27 +186,27 @@ func (r RSAPSSVerifier) validate(req *verifyRequest) error {
 	return nil
 }
 
-func (r RSAPSSVerifier) verify(req *verifyRequest) error {
+func (r RSAPKCS1v15Verifier) verify(req *verifyRequest) error {
 	return rsa.VerifyPSS(r.PublicKey, req.hashFunc, req.digest, req.signature, req.pssOpts)
 }
 
-type RSAPSSSignerVerifier struct {
-	RSAPSSSigner
-	RSAPSSVerifier
+type RSAPKCS1v15SignerVerifier struct {
+	RSAPKCS1v15Signer
+	RSAPKCS1v15Verifier
 }
 
-func NewRSAPSSSignerVerifier(priv *rsa.PrivateKey, hf crypto.Hash) (*RSAPSSSignerVerifier, error) {
-	signer, err := NewRSAPSSSigner(priv, hf)
+func NewRSAPKCS1v15SignerVerifier(priv *rsa.PrivateKey, hf crypto.Hash) (*RSAPKCS1v15SignerVerifier, error) {
+	signer, err := NewRSAPKCS1v15Signer(priv, hf)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing signer")
 	}
-	verifier, err := NewRSAPSSVerifier(&priv.PublicKey, hf)
+	verifier, err := NewRSAPKCS1v15Verifier(&priv.PublicKey, hf)
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing verifier")
 	}
 
-	return &RSAPSSSignerVerifier{
-		RSAPSSSigner:   *signer,
-		RSAPSSVerifier: *verifier,
+	return &RSAPKCS1v15SignerVerifier{
+		RSAPKCS1v15Signer:   *signer,
+		RSAPKCS1v15Verifier: *verifier,
 	}, nil
 }
