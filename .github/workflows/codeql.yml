@@ -58,10 +58,12 @@ jobs:
       uses: github/codeql-action/init@75f07e7ab2ee63cba88752d8c696324e4df67466 # v1.1.3
       with:
         languages: ${{ matrix.language }}
-        debug: true
+        config-file: ./.github/codeql/codeql-config.yml
 
-    - name: Build source code only (don't run fuzzing)
-      run: make pkg
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@75f07e7ab2ee63cba88752d8c696324e4df67466 # v1.1.3
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@75f07e7ab2ee63cba88752d8c696324e4df67466 # v1.1.3
+      env:
+        CODEQL_EXTRACTOR_GO_BUILD_COMMAND: "make pkg"
