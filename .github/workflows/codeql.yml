@@ -59,8 +59,8 @@ jobs:
       with:
         languages: ${{ matrix.language }}
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@75f07e7ab2ee63cba88752d8c696324e4df67466 # v1.1.3
+    - name: Build source code only (don't run fuzzing)
+      run: make pkg
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@75f07e7ab2ee63cba88752d8c696324e4df67466 # v1.1.3
