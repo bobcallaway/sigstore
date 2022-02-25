@@ -15,7 +15,7 @@
 
 .PHONY: all pkg test test-e2e clean lint fuzz help
 
-all: pkg fuzz
+all: pkg
 
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
@@ -34,10 +34,10 @@ lint: ## Run golangci-lint
 	$(GOBIN)/golangci-lint run -v --new-from-rev=HEAD~ ./...
 
 pkg: ## Build pkg
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" ./...
+	CGO_ENABLED=0 go build -v -trimpath -ldflags "$(LDFLAGS)" ./...
 
 test: ## Run Tests
-	go test ./...
+	go test -v ./...
 
 test-e2e: ## Run E2E Tests
 	go test -tags e2e ./test/e2e/...

@@ -58,6 +58,7 @@ jobs:
       uses: github/codeql-action/init@75f07e7ab2ee63cba88752d8c696324e4df67466 # v1.1.3
       with:
         languages: ${{ matrix.language }}
+        debug: true
 
     - name: Build source code only (don't run fuzzing)
       run: make pkg
