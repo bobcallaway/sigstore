@@ -46,7 +46,7 @@ func init() {
 type hashivaultClient struct {
 	client                  *vault.Client
 	keyPath                 string
-	transitSecretEnginePath string
+	transitSecretEnginePath string // lgtm[go/hardcoded-credentials]
 	keyCache                *ttlcache.Cache
 	keyVersion              uint64
 }
@@ -129,7 +129,7 @@ func newHashivaultClient(address, token, transitSecretEnginePath, keyResourceID 
 		transitSecretEnginePath = os.Getenv("TRANSIT_SECRET_ENGINE_PATH")
 	}
 	if transitSecretEnginePath == "" {
-		transitSecretEnginePath = "transit"
+		transitSecretEnginePath = "transit" // lgtm[go/hardcoded-credentials]
 	}
 
 	hvClient := &hashivaultClient{
