@@ -104,3 +104,56 @@ func CheckExpiration(cert *x509.Certificate, epoch time.Time) error {
 	}
 	return nil
 }
+
+// verifyCertificateChain verifies that the provided certificates form a valid
+// chain from leaf to root. This function assumes the following ordering of the
+// []*x509.Certificate argument: leaf certificate first, followed by zero to N
+// intermediates, followed by zero or one root certificate.
+//
+// This function also ensures that the certificates were marked with the extended key
+// usage flag optionally provided when calling this method
+//
+// Note that this function does not do any revocation checking of the certificates.
+func verifyCertificateChain(certChain []*x509.Certificate, keyUsage ...x509.ExtKeyUsage) error {
+	if len(certChain) == 0 {
+		return errors.New("no valid certificates in chain")
+	}
+	roots := x509.NewCertPool()
+	intermediates := x509.NewCertPool()
+	for _, cert := range certChain[1:(len(certChain) - 1)] {
+		intermediates.AddCert(cert)
+	}
+	roots.AddCert(certChain[len(certChain)-1])
+	_, err := certChain[0].Verify(x509.VerifyOptions{
+		Roots:         roots,
+		KeyUsages:     keyUsage,
+		Intermediates: intermediates,
+	})
+	return err
+}
+
+// VerifyCodeSigningCertificateChain verifies that the provided certificates form a valid
+// chain from leaf to root. This function assumes the following ordering of the
+// []*x509.Certificate argument: leaf certificate first, followed by zero to N
+// intermediates, followed by zero or one root certificate.
+//
+// This function also ensures that the certificates were marked with the extended key
+// usage flag for Code Signing
+//
+// Note that this function does not do any revocation checking of the certificates.
+func VerifyCodeSigningCertificateChain(certChain []*x509.Certificate) error {
+	return verifyCertificateChain(certChain, x509.ExtKeyUsageCodeSigning)
+}
+
+// VerifyTimestampCertificateChain verifies that the provided certificates form a valid
+// chain from leaf to root. This function assumes the following ordering of the
+// []*x509.Certificate argument: leaf certificate first, followed by zero to N
+// intermediates, followed by zero or one root certificate.
+//
+// This function also ensures that the certificates were marked with the extended key
+// usage flag for Timestamping.
+//
+// Note that this function does not do any revocation checking of the certificates.
+func VerifyTimestampCertificateChain(certChain []*x509.Certificate) error {
+	return verifyCertificateChain(certChain, x509.ExtKeyUsageTimeStamping)
+}

@@ -304,3 +304,15 @@ func TestCheckExpiration(t *testing.T) {
 		})
 	}
 }
+
+/*
+	good cases
+	 - only leaf
+	 - leaf and root
+	 - leaf and intermediate and root
+	good certs, wrong order (root to leaf)
+	mismatched root to leaf
+	valid root and leaf, incorrect intermediate
+	valid chain, missing code signing key usage
+	valid chain, missing timestamping key usage
+*/
