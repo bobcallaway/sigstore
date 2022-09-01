@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.16.10
 	github.com/aws/aws-sdk-go-v2/config v1.15.17
 	github.com/aws/aws-sdk-go-v2/service/kms v1.18.2
-	github.com/coreos/go-oidc/v3 v3.2.0
+	github.com/coreos/go-oidc/v3 v3.3.0
 	github.com/go-rod/rod v0.108.2
 	github.com/go-test/deep v1.0.8
 	github.com/google/go-cmp v0.5.8
@@ -27,7 +27,7 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/theupdateframework/go-tuf v0.3.1
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
-	golang.org/x/oauth2 v0.0.0-20220718184931-c8730f7fcb92
+	golang.org/x/oauth2 v0.0.0-20220822191816-0ebed06d0094
 	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467
 	google.golang.org/api v0.91.0
 	google.golang.org/genproto v0.0.0-20220720214146-176da50484ac
@@ -108,9 +108,9 @@ require (
 	github.com/ysmood/leakless v0.8.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
+	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b // indirect
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
