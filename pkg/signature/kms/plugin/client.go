@@ -1,7 +1,5 @@
-//go:build tools
-// +build tools
-
-// Copyright 2021 The Sigstore Authors.
+//
+// Copyright 2024 The Sigstore Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +12,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-// This package imports things required by build scripts, to force `go mod` to see them as dependencies
-package tools
+package plugin
 
 import (
-	_ "github.com/AdaLogics/go-fuzz-headers"
-	_ "github.com/dvyukov/go-fuzz/go-fuzz"
-	_ "github.com/dvyukov/go-fuzz/go-fuzz-build"
-	_ "github.com/dvyukov/go-fuzz/go-fuzz-dep"
-	_ "github.com/googleapis/api-linter/cmd/api-linter"
-	_ "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
-	_ "google.golang.org/protobuf/cmd/protoc-gen-go"
+	"context"
+	"crypto"
+
+	"github.com/sigstore/sigstore/pkg/signature"
+	sigkms "github.com/sigstore/sigstore/pkg/signature/kms"
 )
+
+func init() {
+	sigkms.AddProvider(ReferenceScheme, func(ctx context.Context, keyResourceID string, _ crypto.Hash, opts ...signature.RPCOption) (sigkms.SignerVerifier, error) {
+		return LoadSignerVerifier(ctx, keyResourceID)
+	})
+}
+
+// ReferenceScheme scheme for plugin service assumes a prefix of 'plugin://' followed by a valid gRPC URI
+const ReferenceScheme = "plugin://"

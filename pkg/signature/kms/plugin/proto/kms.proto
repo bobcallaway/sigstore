@@ -1,0 +1,86 @@
+//
+// Copyright 2024 The Sigstore Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+package dev.sigstore.kms.v1;
+option go_package = "github.com/sigstore/sigstore/pkg/signature/kms/plugin/generated";
+
+// comes from https://github.com/sigstore/protobuf-specs/protos/sigstore_common.proto
+import "sigstore_common.proto";
+
+// These RPCs map to the SignerVerifier interface in pkg/signature/kms/kms.go
+
+// CreateKey(ctx context.Context, algorithm string) (crypto.PublicKey, error)
+message CreateKeyRequest {
+    string algorithm = 1;
+}
+
+message CreateKeyResponse {
+    dev.sigstore.common.v1.PublicKey public_key = 1;
+    optional dev.sigstore.common.v1.PublicKeyIdentifier pkid = 2;
+}
+ 
+// PublicKey(opts ...PublicKeyOption) (crypto.PublicKey, error)
+message PublicKeyRequest {}
+
+message PublicKeyResponse {
+    dev.sigstore.common.v1.PublicKey public_key = 1;
+}
+ 
+// SignMessage(message io.Reader, opts ...SignOption) ([]byte, error)
+message SignMessageRequest {
+    oneof input {
+        bytes message = 1;
+        dev.sigstore.common.v1.HashOutput hash_output = 2;
+    }
+}
+
+message SignMessageResponse {
+    dev.sigstore.common.v1.MessageSignature signature = 1;
+}
+
+// VerifySignature(signature, message io.Reader, opts ...VerifyOption) error
+message VerifySignatureRequest {
+    dev.sigstore.common.v1.MessageSignature signature = 1;
+}
+
+// VerifySignatureResponse is empty or an error will be returned if the verification failed for any reason
+
+// SupportedAlgorithms() []string
+message SupportedAlgorithmsRequest {
+}
+
+message SupportedAlgorithmsResponse {
+    repeated string algorithm = 1;
+}
+
+// DefaultAlgorithm() string
+message DefaultAlgorithmRequest {
+}
+
+message DefaultAlgorithmResponse {
+    string algorithm = 1;
+}
+
+message Empty {}
+
+service KMSPlugin {
+    rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);
+    rpc PublicKey(PublicKeyRequest) returns (PublicKeyResponse);
+    rpc SignMessage(SignMessageRequest) returns (SignMessageResponse);
+    rpc VerifySignature(VerifySignatureRequest) returns (Empty);
+    rpc SupportedAlgorithms(SupportedAlgorithmsRequest) returns (SupportedAlgorithmsResponse);
+    rpc DefaultAlgorithm(DefaultAlgorithmRequest) returns (DefaultAlgorithmResponse);
+}
