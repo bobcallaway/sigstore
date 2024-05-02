@@ -24,10 +24,10 @@ import (
 )
 
 func init() {
-	sigkms.AddProvider(ReferenceScheme, func(ctx context.Context, keyResourceID string, _ crypto.Hash, opts ...signature.RPCOption) (sigkms.SignerVerifier, error) {
-		return LoadSignerVerifier(ctx, keyResourceID)
+	sigkms.AddProvider(ReferenceSchemePrefix, func(ctx context.Context, keyResourceID string, _ crypto.Hash, opts ...signature.RPCOption) (sigkms.SignerVerifier, error) {
+		return LoadSignerVerifier(ctx, keyResourceID, opts...)
 	})
 }
 
-// ReferenceScheme scheme for plugin service assumes a prefix of 'plugin://' followed by a valid gRPC URI
-const ReferenceScheme = "plugin://"
+// ReferenceSchemePrefix scheme for plugin service assumes a prefix of 'plugin://' followed by a valid gRPC URI
+const ReferenceSchemePrefix = "plugin://"

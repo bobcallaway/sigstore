@@ -1,0 +1,6 @@
+[submodule "pkg/signature/kms/plugin/proto/protobuf-specs"]
+	path = pkg/signature/kms/plugin/proto/protobuf-specs
+	url = https://github.com/sigstore/protobuf-specs
+[submodule "pkg/signature/kms/plugin/proto/googleapis"]
+	path = pkg/signature/kms/plugin/proto/googleapis
+	url = https://github.com/googleapis/googleapis

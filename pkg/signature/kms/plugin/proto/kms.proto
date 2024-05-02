@@ -18,7 +18,7 @@ package dev.sigstore.kms.v1;
 option go_package = "github.com/sigstore/sigstore/pkg/signature/kms/plugin/generated";
 
 // comes from https://github.com/sigstore/protobuf-specs/protos/sigstore_common.proto
-import "sigstore_common.proto";
+import "protobuf-specs/protos/sigstore_common.proto";
 
 // These RPCs map to the SignerVerifier interface in pkg/signature/kms/kms.go
 
@@ -57,24 +57,23 @@ message VerifySignatureRequest {
 }
 
 // VerifySignatureResponse is empty or an error will be returned if the verification failed for any reason
+message Empty {}
 
-// SupportedAlgorithms() []string
+// SupportedAlgorithmsRequest returns a list of algorithms supported by the plugin
 message SupportedAlgorithmsRequest {
 }
 
 message SupportedAlgorithmsResponse {
-    repeated string algorithm = 1;
+    repeated string algorithms = 1;
 }
 
-// DefaultAlgorithm() string
+// DefaultAlgorithm returns the default algorithm to be used if one is not requested by the caller
 message DefaultAlgorithmRequest {
 }
 
 message DefaultAlgorithmResponse {
     string algorithm = 1;
 }
-
-message Empty {}
 
 service KMSPlugin {
     rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);

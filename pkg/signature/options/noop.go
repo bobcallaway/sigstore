@@ -20,6 +20,8 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"io"
+
+	"google.golang.org/grpc"
 )
 
 // NoOpOptionImpl implements the RPCOption, SignOption, VerifyOption interfaces as no-ops.
@@ -57,3 +59,6 @@ func (NoOpOptionImpl) ApplyED25519ph(_ *bool) {}
 
 // ApplyRSAPSS is a no-op required to fully implement the requisite interfaces
 func (NoOpOptionImpl) ApplyRSAPSS(_ **rsa.PSSOptions) {}
+
+// ApplyGRPCDialOpts is a no-op required to fully implement the requisite interfaces
+func (NoOpOptionImpl) ApplyGRPCDialOpts(_ *grpc.DialOption) {}

@@ -17,6 +17,8 @@
 
 all: pkg fuzz
 
+SRCS = $(shell find pkg -name "*.go") $(GENSRC)
+
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 FUZZ_DIR := ./test/fuzz
@@ -30,23 +32,27 @@ LDFLAGS ?=
 
 GO_MOD_DIRS = . ./pkg/signature/kms/aws ./pkg/signature/kms/azure ./pkg/signature/kms/gcp ./pkg/signature/kms/hashivault
 
-GENSRC = pkg/signature/kms/plugin/generated/%.go
-PROTOBUF_DEPS = $(shell find . -iname "*.proto" | grep -v "third_party")
+PLUGINDIR:= $(abspath pkg/signature/kms/plugin)
+PROTODIR:= $(PLUGINDIR)/proto
+GENSRCDIR:= $(PLUGINDIR)/generated
+GENSRC = $(GENSRCDIR)/%.go
+GEN_GO_MODULE=$(shell head -1 $(PLUGINDIR)/go.mod | cut -f2 -d ' ')
+PROTOBUF_DEPS = $(abspath $(shell find . -iname "*.proto" | grep -v "protobuf-specs" | grep -v "googleapis"))
 
 PROTOC-GEN-GO := $(TOOLS_BIN_DIR)/protoc-gen-go
 PROTOC-GEN-GO-GRPC := $(TOOLS_BIN_DIR)/protoc-gen-go-grpc
 PROTOC-API-LINTER := $(TOOLS_BIN_DIR)/api-linter
 
-gen: $(GENSRC)
-
 $(GENSRC): $(PROTOC-GEN-GO) $(PROTOC-GEN-GO-GRPC) $(PROTOC-API-LINTER)
-	mkdir -p pkg/signature/kms/plugin/generated
-	$(PROTOC-API-LINTER) $(PROTOBUF_DEPS) #--set-exit-status # TODO: add strict checking
-	protoc --plugin=protoc-gen-go=$(TOOLS_BIN_DIR)/protoc-gen-go \
-	       --go_opt=module=$(GO_MODULE) --go_out=. \
-	       --plugin=protoc-gen-go-grpc=$(TOOLS_BIN_DIR)/protoc-gen-go-grpc \
-	       --go-grpc_opt=module=$(GO_MODULE) --go-grpc_out=. \
-		   $(PROTOBUF_DEPS)
+	mkdir -p $(GENSRCDIR)
+	# $(PROTOC-API-LINTER) -I $(PROTODIR) -I $(PROTODIR)/protobuf-specs -I $(PROTODIR)/googleapis $(PROTOBUF_DEPS) #--set-exit-status # TODO: add strict checking
+	protoc -I $(PROTODIR) -I $(PROTODIR)/googleapis/ -I $(PROTODIR)/protobuf-specs/protos/ \
+	       --plugin=protoc-gen-go=$(PROTOC-GEN-GO) \
+	       --go_opt=module=$(GEN_GO_MODULE) --go_out=$(PLUGINDIR) \
+	       --plugin=protoc-gen-go-grpc=$(PROTOC-GEN-GO-GRPC) \
+	       --go-grpc_opt=module=$(GEN_GO_MODULE) --go-grpc_out=$(PLUGINDIR) $(PROTOBUF_DEPS)
+
+gen: $(GENSRC)
 
 golangci-lint:
 	rm -f $(GOLANGCI_LINT_BIN) || :
@@ -56,7 +62,7 @@ golangci-lint:
 lint: golangci-lint ## Run golangci-lint
 	$(GOLANGCI_LINT_BIN) run -v --new-from-rev=HEAD~ ./...
 
-pkg: $(GENSRC) ## Build pkg
+pkg: $(SRCS) ## Build pkg
 	set -o xtrace; \
 	for dir in $(GO_MOD_DIRS) ; do \
 	    cd $$dir && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" ./... && cd - >/dev/null; \
@@ -93,13 +99,16 @@ clean: ## Clean workspace
 ## --------------------------------------
 
 $(GO-FUZZ-BUILD): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR);go build -trimpath -tags=tools -o $(TOOLS_BIN_DIR)/go-fuzz-build github.com/dvyukov/go-fuzz/go-fuzz-build
+	cd $(TOOLS_DIR); go build -trimpath -tags=tools -o $(TOOLS_BIN_DIR)/go-fuzz-build github.com/dvyukov/go-fuzz/go-fuzz-build
 
 $(PROTOC-GEN-GO): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR); go build -trimpath -tags=tools -o $(TOOLS_BIN_DIR)/protoc-gen-go google.golang.org/protobuf/cmd/protoc-gen-go
 
 $(PROTOC-GEN-GO-GRPC): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR); go build -trimpath -tags=tools -o $(TOOLS_BIN_DIR)/protoc-gen-go-grpc google.golang.org/grpc/cmd/protoc-gen-go-grpc
+
+$(PROTOC-API-LINTER): $(TOOLS_DIR)/go.mod
+	cd $(TOOLS_DIR); go build -trimpath -tags=tools -o $(TOOLS_BIN_DIR)/api-linter github.com/googleapis/api-linter/cmd/api-linter 
 
 ##################
 # help

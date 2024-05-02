@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/sigstore/sigstore/pkg/signature/options"
+	"google.golang.org/grpc"
 )
 
 // RPCOption specifies options to be used when performing RPC
@@ -30,6 +31,7 @@ type RPCOption interface {
 	ApplyRemoteVerification(*bool)
 	ApplyRPCAuthOpts(opts *options.RPCAuth)
 	ApplyKeyVersion(keyVersion *string)
+	ApplyGRPCDialOpts(opts *grpc.DialOption)
 }
 
 // PublicKeyOption specifies options to be used when obtaining a public key
