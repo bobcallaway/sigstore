@@ -13,4 +13,4 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-FROM docker.io/localstack/localstack:3.7.1@sha256:7f4f51bbfcfb42c661b9c02716a3cfcb53433f3c066905329aa911178835b300
+FROM docker.io/localstack/localstack:3.8.0@sha256:f1db6c829fd3ab8db21007e91f62b6f76396722fcbaf6d223a8110f42482fd7e
