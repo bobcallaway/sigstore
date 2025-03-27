@@ -23,7 +23,7 @@ require (
 	golang.org/x/crypto v0.35.0
 	golang.org/x/oauth2 v0.28.0
 	golang.org/x/term v0.29.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
