@@ -13,4 +13,4 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-FROM docker.io/hashicorp/vault:1.18.5@sha256:750bb37c1638fa194ab37053a81618c61bb0491ddec6fccac87c07a8e6cd8166
+FROM docker.io/hashicorp/vault:1.19.3@sha256:7735a161c835879b918982ddd2ec46d73d1e9f85be7f6a4d5cad902887e5d4d7
