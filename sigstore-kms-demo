@@ -1,0 +1,149 @@
+#!/bin/bash
+
+# sigstore-kms-demo - Wrapper script that implements async plugin via daemon
+
+set -e
+
+# Debug mode
+DEBUG=${DEBUG:-0}
+debug() {
+    if [ "$DEBUG" = "1" ]; then
+        echo "[DEBUG] $*" >&2
+    fi
+}
+
+DAEMON_SOCKET="/tmp/demo-plugin-daemon.sock"
+DAEMON_PID_FILE="/tmp/demo-plugin-daemon.pid"
+DAEMON_SRC="./demo-plugin-daemon.go"
+
+# Function to start daemon if not running
+start_daemon_if_needed() {
+    debug "Checking if daemon is running..."
+    
+    # Check if daemon is already running
+    if [ -f "$DAEMON_PID_FILE" ]; then
+        PID=$(cat "$DAEMON_PID_FILE" 2>/dev/null || echo "")
+        debug "Found PID file with PID: $PID"
+        if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+            # Daemon is running, check if socket exists
+            if [ -S "$DAEMON_SOCKET" ]; then
+                debug "Daemon already running and socket exists"
+                return 0
+            fi
+            debug "Daemon running but socket missing"
+        else
+            debug "PID file exists but process not running - cleaning up"
+            rm -f "$DAEMON_PID_FILE" "$DAEMON_SOCKET"
+        fi
+    else
+        debug "No PID file found"
+    fi
+    
+    # Start daemon
+    debug "Starting daemon with command: go run $DAEMON_SRC $DAEMON_SOCKET"
+    echo "Starting daemon..." >&2
+    go run $DAEMON_SRC "$DAEMON_SOCKET" &
+    DAEMON_PID=$!
+    echo "$DAEMON_PID" > "$DAEMON_PID_FILE"
+    debug "Daemon started with PID: $DAEMON_PID"
+    
+    # Wait for socket to be created
+    debug "Waiting for socket to be created..."
+    for i in {1..50}; do
+        if [ -S "$DAEMON_SOCKET" ]; then
+            debug "Socket created successfully"
+            echo "Daemon started successfully (PID: $DAEMON_PID)" >&2
+            return 0
+        fi
+        debug "Attempt $i: socket not ready yet"
+        sleep 0.1
+    done
+    
+    echo "Failed to start daemon or socket not created" >&2
+    debug "Socket creation timed out"
+    return 1
+}
+
+# Function to send request to daemon
+send_request() {
+    local protocol_version="$1"
+    local args_json="$2"
+    local stdin_data="$3"
+    
+    # Create request line (protocol format expected by daemon)
+    local request_line="$protocol_version $args_json"
+    debug "Sending request: $request_line"
+    
+    # Send to daemon via nc and get response
+    debug "Connecting to socket: $DAEMON_SOCKET"
+    local response
+    response=$(echo "$request_line" | nc -U "$DAEMON_SOCKET" 2>/dev/null)
+    debug "Received response: $response"
+    echo "$response"
+}
+
+# Main execution
+main() {
+    debug "Script called with args: $*"
+    
+    if [ $# -ne 2 ]; then
+        echo '{"ErrorMessage": "Invalid arguments. Expected: protocol_version args_json"}' >&2
+        exit 1
+    fi
+    
+    local protocol_version="$1"
+    local args_json="$2"
+    local stdin_data=""
+    
+    debug "Protocol version: $protocol_version"
+    debug "Args JSON: $args_json"
+    
+    # Read stdin if available
+    if [ ! -t 0 ]; then
+        stdin_data=$(cat)
+        debug "Read stdin data: $stdin_data"
+    else
+        debug "No stdin data"
+    fi
+    
+    # Start daemon if needed
+    debug "Starting daemon if needed..."
+    if ! start_daemon_if_needed; then
+        echo '{"ErrorMessage": "Failed to start daemon"}' >&2
+        exit 1
+    fi
+    
+    # Send request to daemon
+    debug "Sending request to daemon..."
+    response=$(send_request "$protocol_version" "$args_json" "$stdin_data")
+    
+    if [ $? -ne 0 ] || [ -z "$response" ]; then
+        debug "Failed to get response from daemon"
+        echo '{"ErrorMessage": "Failed to communicate with daemon"}' >&2
+        exit 1
+    fi
+    
+    debug "Processing response: $response"
+    
+    # Parse daemon response and extract the result
+    success=$(echo "$response" | jq -r '.success // false' 2>/dev/null)
+    debug "Success field: $success"
+    
+    if [ "$success" = "true" ]; then
+        result=$(echo "$response" | jq -r '.result // "{}"' 2>/dev/null)
+        debug "Extracted result: $result"
+        echo "$result"
+    else
+        error_msg=$(echo "$response" | jq -r '.error_message // "Unknown error"' 2>/dev/null)
+        debug "Error message: $error_msg"
+        echo "{\"ErrorMessage\": \"$error_msg\"}" >&2
+        exit 1
+    fi
+}
+
+# Note: We intentionally do NOT clean up the daemon on exit
+# The daemon should persist across multiple plugin calls for performance
+# The test script or user can kill it manually when done
+
+# Run main function
+main "$@"
