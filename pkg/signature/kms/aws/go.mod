@@ -7,7 +7,7 @@ go 1.24.0
 toolchain go1.24.5
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.38.3
+	github.com/aws/aws-sdk-go-v2 v1.39.2
 	github.com/aws/aws-sdk-go-v2/config v1.31.2
 	github.com/aws/aws-sdk-go-v2/service/kms v1.45.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
