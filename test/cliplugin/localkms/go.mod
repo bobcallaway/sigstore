@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/go-jose/go-jose/v4 v4.1.2 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/google/go-containerregistry v0.20.6 // indirect
 	github.com/letsencrypt/boulder v0.20250721.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -25,5 +25,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250519155744-55703ea1f237 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 )
