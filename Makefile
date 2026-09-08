@@ -32,6 +32,8 @@ endif
 PATH := $(PATH):$(TEST_LOCALKMS_BIN_DIR)
 CLI_PLUGIN_DIR := ./pkg/signature/kms/cliplugin
 
+TAGS ?= e2e,integration,signer_program
+
 LDFLAGS ?=
 
 GO_MOD_DIRS = . ./pkg/signature/kms/aws ./pkg/signature/kms/azure ./pkg/signature/kms/gcp ./pkg/signature/kms/hashivault ./test/cliplugin/localkms ./test/fuzz ./hack/tools
@@ -44,12 +46,15 @@ lint:
 pkg: ## Build pkg
 	set -o xtrace; \
 	for dir in $(GO_MOD_DIRS) ; do \
-	    cd $$dir && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" ./... && cd - >/dev/null; \
+	    if [ "$$dir" = "./hack/tools" ]; then continue; fi; \
+	    cd $$dir && CGO_ENABLED=0 go build -trimpath -tags "$(TAGS)" -ldflags "$(LDFLAGS)" ./... && \
+	    go test -exec true -trimpath -tags "$(TAGS)" -ldflags "$(LDFLAGS)" ./... && cd - >/dev/null; \
 	done
 
 test: ## Run Tests for all Go modules.
 	set -o xtrace; \
 	for dir in $(GO_MOD_DIRS) ; do \
+	    if [ "$$dir" = "./hack/tools" ]; then continue; fi; \
 	    cd $$dir && go test ./... && cd - >/dev/null; \
 	done
 
